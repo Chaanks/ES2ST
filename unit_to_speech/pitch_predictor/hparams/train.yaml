@@ -1,0 +1,130 @@
+###################################
+# Experiment Parameters and setup #
+###################################
+seed: 1234
+__set_seed: !apply:torch.manual_seed [!ref <seed>]
+model_name: !PLACEHOLDER
+output_folder: !ref results/pitch_predictor/<seed>/<model_name>
+save_folder: !ref <output_folder>/save
+train_log: !ref <output_folder>/train_log.txt
+epochs: 100 #1000
+keep_checkpoint_interval: 10
+
+
+#################################
+# Data files and pre-processing #
+#################################
+data_folder: /corpus/S2UT/16K
+train_json: [
+  !ref <data_folder>/LJ/metadata_train.json
+]
+valid_json: [
+  !ref <data_folder>/LJ/metadata_test.json
+]
+
+splits: ["train", "valid"]
+units_folder: /ES2UT/data/discrete_units/combined_hubert_l6
+speakers_folder: /ES2UT/data/speaker_embeddings/LJ_ecapa/
+emotions_folder: /ES2UT/data/emotion_embeddings/LJ_wav2vec2/
+
+multi_speaker: False
+multi_emotion: True
+
+f0_bins: 50
+f0_pred: mean # [argmax, mean]
+f0_smoothing: 0.1
+f0_norm: mean # "mean"
+f0_log: false
+f0_bin_type: adaptive # [uniform, adaptive]
+
+
+n_tokens: 100
+
+################################
+# Audio Parameters             #
+################################
+sample_rate: 16000
+hop_length: 256
+win_length: 1024
+n_mel_channels: 80
+n_fft: 1024
+mel_fmin: 0.0
+mel_fmax: 8000
+mel_normalized: False
+power: 1
+norm: "slaney"
+mel_scale: "slaney"
+dynamic_range_compression: True
+
+################################
+# Optimization Hyperparameters #
+################################
+
+learning_rate: 0.0001
+weight_decay: 0.9999
+batch_size: 64
+
+train_dataloader_opts:
+  batch_size: !ref <batch_size>
+  drop_last: False
+  num_workers: 8
+  collate_fn: !new:speechbrain.lobes.models.HifiGAN.PitchPredictorCollate
+    padding_idx: !ref <n_tokens>
+
+valid_dataloader_opts:
+  batch_size: 1
+  num_workers: 8
+  collate_fn: !new:speechbrain.lobes.models.HifiGAN.PitchPredictorCollate
+      padding_idx: !ref <n_tokens>
+
+test_dataloader_opts:
+  batch_size: 1
+  num_workers: 8
+
+
+################################
+# Model Parameters and model   #
+################################
+
+in_channels: 256
+num_embeddings: !ref <n_tokens>
+embedding_dim: 256
+channels: 256
+kernel: 5
+dropout: 0.1
+n_layers: 6
+
+model: !new:speechbrain.lobes.models.HifiGAN.PitchPredictor
+  in_channels: !ref <in_channels>
+  num_embeddings: !ref <num_embeddings>
+  embedding_dim: !ref <embedding_dim>
+  channels: !ref <channels>
+  kernel: !ref <kernel>
+  dropout: !ref <dropout>
+  n_layers: !ref <n_layers>
+  n_bins: !ref <f0_bins>
+  f0_pred: !ref <f0_pred>
+  f0_log: !ref <f0_log>
+  f0_norm: !ref <f0_norm>
+
+modules:
+  model: !ref <model>
+
+# Optimizer
+opt_class: !name:torch.optim.Adam
+  lr: !ref <learning_rate>
+  #betas: [!ref <adam_b1>, !ref <adam_b2>]
+
+#epoch object
+epoch_counter: !new:speechbrain.utils.epoch_loop.EpochCounter
+  limit: !ref <epochs>
+
+train_logger: !new:speechbrain.utils.train_logger.FileTrainLogger
+  save_file: !ref <train_log>
+
+#checkpointer
+checkpointer: !new:speechbrain.utils.checkpoints.Checkpointer
+  checkpoints_dir: !ref <save_folder>
+  recoverables:
+    model: !ref <model>
+    counter: !ref <epoch_counter>
